@@ -80,10 +80,11 @@ function updateDisplay(message, isLoading = false, isError = false, citationData
                 citationOutput.style.height = 'auto'; // Reset height
                 citationOutput.style.height = (citationOutput.scrollHeight + 2) + 'px'; // Set to scroll height + border
             } else if (citationMode === 'ppt' && citationData.ppt) {
-                // Display PPT format in the main textarea if it's the *only* mode
+                // Display PPT format in the main textarea if it's the *only* mode selected
                 citationOutput.value = citationData.ppt;
                 fullCitationArea.classList.remove('hidden');
-                fullCitationArea.querySelector('label').textContent = "PowerPoint Citation:"; // Change label
+                 // Change label for clarity when only PPT is shown
+                 fullCitationArea.querySelector('label').textContent = "PowerPoint Citation:";
                 // Adjust textarea height
                 citationOutput.style.height = 'auto';
                 citationOutput.style.height = (citationOutput.scrollHeight + 2) + 'px';
@@ -138,12 +139,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 3. Check URL support
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            updateDisplay("Please open an IEEE Xplore or arXiv article.", false, false, null, citationMode); return;
+            updateDisplay("Please open an IEEE Xplore, arXiv, or MDPI article.", false, false, null, citationMode); return;
         }
         const isIeee = url.includes('ieeexplore.ieee.org/document/');
         const isArxiv = url.includes('arxiv.org/abs/') || url.includes('arxiv.org/pdf/');
-        if (!isIeee && !isArxiv) {
-            updateDisplay("Website not supported. Open IEEE Xplore or arXiv.", false, false, null, citationMode); return;
+        const isMdpi = url.includes('mdpi.com/'); // Basic check for MDPI domain
+        if (!isIeee && !isArxiv && !isMdpi) { // Check all supported types
+            updateDisplay("Website not supported. Open IEEE Xplore, arXiv, or MDPI.", false, false, null, citationMode); return;
         }
 
         // 4. Send message to background
@@ -170,11 +172,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     await navigator.clipboard.writeText(textToAutoCopy);
                     console.log("Auto-copied:", textToAutoCopy);
-                    baseStatusMessage = "Citation Copied!"; // Update status only if auto-copy succeeds
+                    baseStatusMessage = "Citation Copied!";
                 } catch (copyError) {
                     console.error('Auto-copy failed: ', copyError);
-                    baseStatusMessage = "Auto-copy failed."; // Indicate failure
-                    // Don't mark as error, just inform
+                    baseStatusMessage = "Auto-copy failed.";
                 }
             } else if (autoCopyEnabled) {
                  baseStatusMessage = "Nothing to auto-copy.";
@@ -190,7 +191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                  statusMessage.textContent += citationData.suggestionError;
             }
 
-            // Add event listeners for manual copy buttons *after* content is populated
+            // Add event listeners for manual copy buttons
             if (copyFullButton && citationData.full) {
                  copyFullButton.addEventListener('click', () => copyToClipboard(citationData.full, copyFullButton));
             }

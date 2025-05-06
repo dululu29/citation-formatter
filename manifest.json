@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Citation Formatter",
-  "version": "1.4", // Incremented version
-  "description": "Fetches, formats, and optionally copies citations from IEEE Xplore or arXiv pages.",
+  "version": "1.7", // Incremented version
+  "description": "Effortlessly format citations from IEEE Xplore, arXiv, and MDPI pages. Supports multiple styles & custom abbreviations. Optional AI suggestions & auto-copy.",
   "permissions": [
     "activeTab",
     "storage",
@@ -12,7 +12,8 @@
   "host_permissions": [
     "*://*.ieeexplore.ieee.org/*",
     "*://*.arxiv.org/*",
-    "https://generativelanguage.googleapis.com/*"
+    "*://*.mdpi.com/*",            // Added MDPI permission
+    "https://generativelanguage.googleapis.com/*" // For optional Gemini
   ],
   "background": {
     "service_worker": "background.js"
@@ -30,9 +31,7 @@
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   },
-  // --- Updated Content Security Policy (Simpler with local CSS) ---
   "content_security_policy": {
-    // Only need 'self' for scripts now, object-src 'none' is safer if no objects needed
     "extension_pages": "script-src 'self'; object-src 'none';"
   },
    "options_page": "options.html"
