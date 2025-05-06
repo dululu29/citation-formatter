@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Citation Formatter",
+  "version": "1.4", // Incremented version
+  "description": "Fetches, formats, and optionally copies citations from IEEE Xplore or arXiv pages.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "clipboardWrite",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "*://*.ieeexplore.ieee.org/*",
+    "*://*.arxiv.org/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  // --- Updated Content Security Policy (Simpler with local CSS) ---
+  "content_security_policy": {
+    // Only need 'self' for scripts now, object-src 'none' is safer if no objects needed
+    "extension_pages": "script-src 'self'; object-src 'none';"
+  },
+   "options_page": "options.html"
+}
