@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+button {
+    /* 重設瀏覽器預設的邏輯 padding 屬性 */
+    padding-block: initial;
+    /* 或者 'unset' */
+    padding-inline: initial;
+    /* 或者 'unset' */
+}

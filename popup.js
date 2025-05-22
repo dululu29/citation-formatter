@@ -1,210 +1,274 @@
+// popup.js
+
 // --- Global DOM Element References ---
-let loadingIndicator, statusMessage, statusContainer,
-    citationOutput, fullCitationArea, copyFullButton,
-    pptOutput, pptCitationArea, copyPptButton;
+let loadingIndicatorElement, statusMessageElement, statusContainerElement,
+    citationsDisplayAreaElement;
 
 // --- Helper: Copy to Clipboard & Provide Feedback ---
 async function copyToClipboard(text, buttonElement) {
     if (!text || !buttonElement) return;
-
     try {
         await navigator.clipboard.writeText(text);
         console.log('Copied:', text);
 
-        // Visual feedback on the button
-        const copyIcon = buttonElement.querySelector('svg:not(.hidden)'); // Get the visible icon
-        const checkIcon = buttonElement.querySelector('svg.hidden');    // Get the hidden check icon
+        // Reset all other copy buttons' states first
+        document.querySelectorAll('.copy-button').forEach(btn => {
+            btn.classList.remove('copied');
+            const ci = btn.querySelector('.copy-icon-svg');
+            const cki = btn.querySelector('.check-icon-svg');
+            if (ci) ci.classList.remove('hidden');
+            if (cki) cki.classList.add('hidden');
+        });
+
+        // Set copied state for the clicked button
+        const copyIcon = buttonElement.querySelector('.copy-icon-svg');
+        const checkIcon = buttonElement.querySelector('.check-icon-svg');
 
         if (copyIcon && checkIcon) {
             copyIcon.classList.add('hidden');
             checkIcon.classList.remove('hidden');
-            buttonElement.classList.add('copied'); // Add green style
+            buttonElement.classList.add('copied');
 
-            // Revert after a short delay
             setTimeout(() => {
                 copyIcon.classList.remove('hidden');
                 checkIcon.classList.add('hidden');
-                buttonElement.classList.remove('copied'); // Remove green style
-            }, 1500); // Revert after 1.5 seconds
+                buttonElement.classList.remove('copied');
+            }, 1500);
         }
     } catch (err) {
         console.error('Failed to copy: ', err);
-        // Optional: Show error state on button or status message
-        statusMessage.textContent = 'Copy failed!';
-        statusMessage.classList.remove('hidden');
-        statusContainer.classList.add('text-red-600');
-        statusContainer.classList.remove('text-green-600', 'text-blue-600', 'text-gray-700');
+        if (statusMessageElement && statusContainerElement) {
+            statusMessageElement.textContent = 'Copy failed!';
+            statusMessageElement.classList.remove('hidden');
+            statusContainerElement.className = 'text-xs mb-3 p-2 rounded-md bg-red-100 text-red-700 font-medium';
+            if (loadingIndicatorElement) loadingIndicatorElement.classList.add('hidden');
+        }
+    }
+}
+
+// --- Display Management Functions ---
+function showLoadingState(message) {
+    if (!loadingIndicatorElement || !statusMessageElement || !statusContainerElement || !citationsDisplayAreaElement) {
+        console.error("showLoadingState: UI elements missing");
+        return;
+    }
+    loadingIndicatorElement.classList.remove('hidden');
+    const loadingMessageSpan = loadingIndicatorElement.querySelector('span');
+    if (loadingMessageSpan) loadingMessageSpan.textContent = message || "Fetching citation...";
+
+    statusMessageElement.classList.add('hidden');
+    statusContainerElement.className = 'text-xs mb-3 p-2 rounded-md bg-blue-100 text-blue-700';
+    citationsDisplayAreaElement.innerHTML = '';
+    citationsDisplayAreaElement.classList.add('hidden');
+}
+
+function showFinalStatus(message, isError = false) {
+    if (!loadingIndicatorElement || !statusMessageElement || !statusContainerElement) return;
+    if (loadingIndicatorElement) loadingIndicatorElement.classList.add('hidden');
+
+    statusMessageElement.textContent = message;
+    statusMessageElement.classList.remove('hidden');
+    if (isError) {
+        statusContainerElement.className = 'text-xs mb-3 p-2 rounded-md bg-red-100 text-red-700 font-medium';
+    } else if (message && message.includes("Copied")) {
+        statusContainerElement.className = 'text-xs mb-3 p-2 rounded-md bg-green-100 text-green-700 font-medium';
+    } else {
+        statusContainerElement.className = 'text-xs mb-3 p-2 rounded-md bg-blue-100 text-blue-600 font-medium';
+    }
+}
+
+function getStyleFriendlyName(styleKey) {
+    switch (styleKey) {
+        case 'no_abbr': return 'No Abbreviation';
+        case 'standard_abbr': return 'Standard Abbreviation';
+        case 'simplest_abbr': return 'Simplest Abbreviation';
+        case 'custom_list_abbr': return 'Custom List';
+        default:
+            return styleKey.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+}
+
+function renderCitations(citationsArray, autoCopyEnabled, preferredStyleOrder) {
+    if (!citationsDisplayAreaElement) {
+        showFinalStatus("Error: Citation display area not found.", true);
+        return;
+    }
+    citationsDisplayAreaElement.innerHTML = ''; // Clear previous content
+
+    if (!citationsArray || citationsArray.length === 0) {
+        showFinalStatus("No citation formats generated or selected.", false);
+        return;
+    }
+
+    let textToAutoCopy = null;
+    let autoCopiedStyleName = '';
+    const primaryAutoCopyStyleKey = preferredStyleOrder && preferredStyleOrder.length > 0 ? preferredStyleOrder[0] : 'standard_abbr';
+
+    citationsArray.forEach((citationObj, index) => {
+        const { styleKey, citationText, suggestionError } = citationObj;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'bg-white p-3 rounded-md shadow border border-gray-200';
+
+        const header = document.createElement('div');
+        header.className = 'flex justify-between items-center mb-1.5 relative'; // Added 'relative' for copy button positioning
+        wrapper.appendChild(header);
+
+        const label = document.createElement('span');
+        label.className = 'text-xs font-semibold text-indigo-600';
+        label.textContent = getStyleFriendlyName(styleKey);
+        header.appendChild(label);
+
+        const copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.className = 'copy-button'; // This class is styled in popup.html <style>
+        copyButton.title = `Copy ${getStyleFriendlyName(styleKey)}`;
+        copyButton.innerHTML = `
+            <svg class="copy-icon-svg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 4.625-2.25-2.25m0 0L15.75 15m-2.25 2.25V15"></path></svg>
+            <svg class="check-icon-svg hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"></path></svg>
+        `;
+        copyButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            copyToClipboard(citationText.replace(/<[^>]*>?/gm, ''), copyButton);
+        });
+        header.appendChild(copyButton);
+
+        const textarea = document.createElement('textarea');
+        textarea.readOnly = true;
+        // Applying consistent styling, similar to .citation-display from your original popup.html
+        textarea.className = 'w-full p-2 text-xs font-mono border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 resize-none overflow-hidden bg-gray-50 mt-1';
+        textarea.value = citationText;
+        wrapper.appendChild(textarea);
+
+        textarea.style.boxSizing = 'border-box';
+        textarea.style.height = 'auto';
+        requestAnimationFrame(() => {
+            textarea.style.height = (textarea.scrollHeight + 3) + 'px';
+        });
+
+        if (suggestionError && suggestionError.trim()) {
+            const errorP = document.createElement('p');
+            errorP.className = 'mt-1 text-xs text-orange-600';
+            errorP.textContent = suggestionError.trim();
+            wrapper.appendChild(errorP);
+        }
+        citationsDisplayAreaElement.appendChild(wrapper);
+
+        // Determine text for auto-copy
+        if (styleKey === primaryAutoCopyStyleKey && textToAutoCopy === null) {
+            textToAutoCopy = citationText;
+            autoCopiedStyleName = getStyleFriendlyName(styleKey);
+        }
+        if (index === 0 && textToAutoCopy === null) { // Fallback to the very first if preferred not found
+            textToAutoCopy = citationText;
+            autoCopiedStyleName = getStyleFriendlyName(styleKey);
+        }
+    });
+
+    citationsDisplayAreaElement.classList.remove('hidden');
+
+    let finalStatusMsg = "Citation(s) displayed.";
+    if (autoCopyEnabled && textToAutoCopy) {
+        const plainText = textToAutoCopy.replace(/<[^>]*>?/gm, '');
+        navigator.clipboard.writeText(plainText)
+            .then(() => {
+                console.log('Auto-copied:', plainText);
+                showFinalStatus(`Copied ${autoCopiedStyleName}!`);
+                // Visual feedback for the auto-copied item's button
+                const buttons = citationsDisplayAreaElement.querySelectorAll('.copy-button');
+                buttons.forEach(btn => {
+                    const labelEl = btn.closest('.bg-white').querySelector('.text-indigo-600');
+                    if (labelEl && labelEl.textContent === autoCopiedStyleName) {
+                        // Trigger 'copied' state for this button
+                        const copyIcon = btn.querySelector('.copy-icon-svg');
+                        const checkIcon = btn.querySelector('.check-icon-svg');
+                        if (copyIcon && checkIcon) {
+                            copyIcon.classList.add('hidden');
+                            checkIcon.classList.remove('hidden');
+                            btn.classList.add('copied');
+                            setTimeout(() => {
+                                copyIcon.classList.remove('hidden');
+                                checkIcon.classList.add('hidden');
+                                btn.classList.remove('copied');
+                            }, 1500);
+                        }
+                    }
+                });
+            })
+            .catch(err => {
+                console.error('Auto-copy failed: ', err);
+                showFinalStatus('Auto-copy failed.', true);
+            });
+    } else if (autoCopyEnabled) {
+        showFinalStatus('Nothing chosen to auto-copy.');
+    } else {
+        showFinalStatus(finalStatusMsg);
     }
 }
 
 
-// --- Helper: Update Status and Display Citations ---
-function updateDisplay(message, isLoading = false, isError = false, citationData = null, citationMode = 'full') {
-    // Ensure all elements are available
-    if (!loadingIndicator || !statusMessage || !statusContainer || !citationOutput || !fullCitationArea || !copyFullButton || !pptOutput || !pptCitationArea || !copyPptButton) {
-        console.error("One or more UI elements not ready or not found!");
-        if (statusMessage && statusContainer) {
-             statusMessage.textContent = "Error: Popup UI elements missing.";
-             statusMessage.classList.remove('hidden');
-             statusContainer.classList.remove('text-indigo-600', 'text-green-600', 'text-red-600', 'text-blue-600', 'text-gray-700');
-             statusContainer.classList.add('text-red-600');
-             if(loadingIndicator) loadingIndicator.classList.add('hidden');
+// --- Main Logic ---
+document.addEventListener('DOMContentLoaded', async () => {
+    loadingIndicatorElement = document.getElementById('loading-indicator');
+    statusMessageElement = document.getElementById('status-message');
+    statusContainerElement = document.getElementById('status-container');
+    citationsDisplayAreaElement = document.getElementById('citations-display-area');
+
+    if (!loadingIndicatorElement || !statusMessageElement || !statusContainerElement || !citationsDisplayAreaElement) {
+        console.error("Popup critical UI elements not found! Check IDs in popup.html and popup.js.");
+        if (document.body) { // Basic fallback if critical elements are missing
+            document.body.innerHTML = '<p style="color: red; padding: 10px;">Error: Popup UI failed to initialize. Check console.</p>';
         }
         return;
     }
 
-    // Toggle loading indicator
-    loadingIndicator.classList.toggle('hidden', !isLoading);
-    statusMessage.classList.toggle('hidden', isLoading);
-
-    // Hide citation areas initially
-    fullCitationArea.classList.add('hidden');
-    pptCitationArea.classList.add('hidden');
-    citationOutput.value = '';
-    pptOutput.textContent = '';
-
-    if (!isLoading) {
-        // Update status message text and color (excluding copy success/fail, handled by copy function)
-        statusMessage.textContent = message;
-        statusContainer.classList.remove('text-indigo-600', 'text-green-600', 'text-red-600', 'text-blue-600', 'text-gray-700');
-        if (isError) statusContainer.classList.add('text-red-600');
-        else if (message.includes('Fetched') || message.includes('Shown')) statusContainer.classList.add('text-blue-600');
-        else statusContainer.classList.add('text-gray-700');
-
-        // Display citations based on mode and data availability
-        if (citationData) {
-            if (citationMode === 'full' && citationData.full) {
-                citationOutput.value = citationData.full;
-                fullCitationArea.classList.remove('hidden');
-                // Adjust textarea height dynamically (simple approach)
-                citationOutput.style.height = 'auto'; // Reset height
-                citationOutput.style.height = (citationOutput.scrollHeight + 2) + 'px'; // Set to scroll height + border
-            } else if (citationMode === 'ppt' && citationData.ppt) {
-                // Display PPT format in the main textarea if it's the *only* mode selected
-                citationOutput.value = citationData.ppt;
-                fullCitationArea.classList.remove('hidden');
-                 // Change label for clarity when only PPT is shown
-                 fullCitationArea.querySelector('label').textContent = "PowerPoint Citation:";
-                // Adjust textarea height
-                citationOutput.style.height = 'auto';
-                citationOutput.style.height = (citationOutput.scrollHeight + 2) + 'px';
-            } else if (citationMode === 'both') {
-                if (citationData.full) {
-                    citationOutput.value = citationData.full;
-                    fullCitationArea.classList.remove('hidden');
-                    fullCitationArea.querySelector('label').textContent = "Full Citation:"; // Ensure correct label
-                    // Adjust textarea height
-                    citationOutput.style.height = 'auto';
-                    citationOutput.style.height = (citationOutput.scrollHeight + 2) + 'px';
-                }
-                if (citationData.ppt) {
-                    pptOutput.textContent = citationData.ppt;
-                    pptCitationArea.classList.remove('hidden');
-                }
-            }
-        }
-    }
-}
-
-// --- Main Logic ---
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log("Popup DOM fully loaded.");
-
-    // Assign elements
-    loadingIndicator = document.getElementById('loading-indicator');
-    statusMessage = document.getElementById('status-message');
-    statusContainer = document.getElementById('status-container');
-    citationOutput = document.getElementById('citation-output');
-    fullCitationArea = document.getElementById('full-citation-area');
-    copyFullButton = document.getElementById('copy-full-button');
-    pptOutput = document.getElementById('ppt-output');
-    pptCitationArea = document.getElementById('ppt-citation-area');
-    copyPptButton = document.getElementById('copy-ppt-button');
-
-    // Initial state: Loading
-    updateDisplay("Fetching citation...", true);
+    showLoadingState("Fetching citation...");
 
     try {
-        // 1. Get settings
-        const settings = await chrome.storage.sync.get({ autoCopy: true, citationMode: 'full' });
-        const autoCopyEnabled = settings.autoCopy;
-        const citationMode = settings.citationMode;
-        console.log("Settings - Auto-copy:", autoCopyEnabled, "Mode:", citationMode);
+        const settings = await chrome.storage.sync.get({
+            autoCopy: true,
+            citationStyles: ['standard_abbr'] // Default matches options.js
+        });
+        console.log("Popup settings:", settings);
 
-        // 2. Get the current active tab URL
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tabs || tabs.length === 0 || !tabs[0].url) throw new Error("Cannot access current tab URL.");
+        if (!tabs || tabs.length === 0 || !tabs[0].url) {
+            showFinalStatus("Cannot access current tab URL.", true); return;
+        }
         const url = tabs[0].url;
-        console.log("Current URL:", url);
 
-        // 3. Check URL support
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            updateDisplay("Please open an IEEE Xplore, arXiv, or MDPI article.", false, false, null, citationMode); return;
+            showFinalStatus("Works on http/https pages only.", false); return;
         }
         const isIeee = url.includes('ieeexplore.ieee.org/document/');
         const isArxiv = url.includes('arxiv.org/abs/') || url.includes('arxiv.org/pdf/');
-        const isMdpi = url.includes('mdpi.com/'); // Basic check for MDPI domain
-        if (!isIeee && !isArxiv && !isMdpi) { // Check all supported types
-            updateDisplay("Website not supported. Open IEEE Xplore, arXiv, or MDPI.", false, false, null, citationMode); return;
+        const isMdpi = url.includes('mdpi.com/');
+        if (!isIeee && !isArxiv && !isMdpi) {
+            showFinalStatus("Unsupported site. Use on IEEE, arXiv, or MDPI.", false); return;
         }
 
-        // 4. Send message to background
-        console.log("Sending fetchCitation message to background...");
+        console.log("Sending fetchCitation to background for URL:", url);
         const response = await chrome.runtime.sendMessage({ action: 'fetchCitation', url: url });
 
-        // Handle communication errors
-        if (chrome.runtime.lastError) throw new Error(`Communication error: ${chrome.runtime.lastError.message || 'Unknown'}`);
-        if (!response) throw new Error("No response from background script.");
-        console.log("Received response from background:", response);
+        if (chrome.runtime.lastError) {
+            throw new Error(`Communication error: ${chrome.runtime.lastError.message || 'Unknown'}`);
+        }
+        if (!response) {
+            throw new Error("No response from background script.");
+        }
+        console.log("Response from background:", response);
 
-        // 5. Handle the response
-        if (response.success && response.citation) {
-            const citationData = response.citation;
-            let baseStatusMessage = "Citation Fetched."; // Default status
-
-            // Determine text for auto-copy
-            let textToAutoCopy = null;
-            if (autoCopyEnabled && citationData.full) textToAutoCopy = citationData.full;
-            else if (autoCopyEnabled && citationMode === 'ppt' && citationData.ppt) textToAutoCopy = citationData.ppt;
-
-            // Perform auto-copy if applicable
-            if (textToAutoCopy) {
-                try {
-                    await navigator.clipboard.writeText(textToAutoCopy);
-                    console.log("Auto-copied:", textToAutoCopy);
-                    baseStatusMessage = "Citation Copied!";
-                } catch (copyError) {
-                    console.error('Auto-copy failed: ', copyError);
-                    baseStatusMessage = "Auto-copy failed.";
-                }
-            } else if (autoCopyEnabled) {
-                 baseStatusMessage = "Nothing to auto-copy.";
+        if (response.success) {
+            if (response.citations && response.citations.length > 0) {
+                renderCitations(response.citations, settings.autoCopy, settings.citationStyles);
             } else {
-                 baseStatusMessage = "Citation Shown.";
+                showFinalStatus("No citation data received or no styles selected.", false);
             }
-
-            // Display citations and final status
-            updateDisplay(baseStatusMessage, false, false, citationData, citationMode);
-
-            // Add suggestion error to status if present
-            if(citationData.suggestionError && !statusMessage.textContent.includes('Suggestion Error')) {
-                 statusMessage.textContent += citationData.suggestionError;
-            }
-
-            // Add event listeners for manual copy buttons
-            if (copyFullButton && citationData.full) {
-                 copyFullButton.addEventListener('click', () => copyToClipboard(citationData.full, copyFullButton));
-            }
-            if (copyPptButton && citationData.ppt) {
-                 copyPptButton.addEventListener('click', () => copyToClipboard(citationData.ppt, copyPptButton));
-            }
-
         } else {
-            // Handle errors reported by the background script
-            throw new Error(response.error || "Unknown error fetching citation.");
+            showFinalStatus(response.error || "Unknown error fetching citation.", true);
         }
     } catch (error) {
-        console.error('Error in popup execution:', error);
-        updateDisplay(`Error: ${error.message}`, false, true, null, 'full'); // Show error state
+        console.error('Error in popup execution:', error, error.stack);
+        showFinalStatus(`Error: ${error.message}`, true);
     }
 });
