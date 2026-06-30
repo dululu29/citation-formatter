@@ -122,7 +122,7 @@ This keeps the resolver unit-testable in Node and ensures the network path is op
 
 ## Adding a Conference Series
 
-Conference families live in [src/abbreviations/data/conference-series.json](/Users/yo/GithubProjects/citation-formatter/src/abbreviations/data/conference-series.json).
+Conference families live in [src/abbreviations/data/conference-series.json](../src/abbreviations/data/conference-series.json).
 
 Add a new object with:
 
@@ -145,7 +145,7 @@ After adding a series, add a resolver test for both the canonical form and at le
 
 ## Adding a Journal Token Rule
 
-Journal token rules live in [src/abbreviations/journalRules.js](/Users/yo/GithubProjects/citation-formatter/src/abbreviations/journalRules.js).
+Journal token rules live in [src/abbreviations/journalRules.js](../src/abbreviations/journalRules.js).
 
 To add a new token abbreviation:
 
