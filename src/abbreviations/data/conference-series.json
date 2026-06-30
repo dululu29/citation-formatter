@@ -1,0 +1,44 @@
+[
+  {
+    "abbreviation": "IEEE GLOBECOM",
+    "titles": [
+      "IEEE Global Communications Conference",
+      "Global Communications Conference"
+    ]
+  },
+  {
+    "abbreviation": "IEEE ICC",
+    "titles": [
+      "IEEE International Conference on Communications",
+      "International Conference on Communications"
+    ]
+  },
+  {
+    "abbreviation": "IEEE INFOCOM",
+    "titles": [
+      "IEEE Conference on Computer Communications",
+      "Conference on Computer Communications"
+    ]
+  },
+  {
+    "abbreviation": "IEEE WCNC",
+    "titles": [
+      "IEEE Wireless Communications and Networking Conference",
+      "Wireless Communications and Networking Conference"
+    ]
+  },
+  {
+    "abbreviation": "IEEE VTC",
+    "titles": [
+      "IEEE Vehicular Technology Conference",
+      "Vehicular Technology Conference"
+    ]
+  },
+  {
+    "abbreviation": "IEEE PIMRC",
+    "titles": [
+      "IEEE International Symposium on Personal, Indoor and Mobile Radio Communications",
+      "International Symposium on Personal, Indoor and Mobile Radio Communications"
+    ]
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "organizations": [
+    "IEEE",
+    "ACM",
+    "CVF",
+    "RSJ",
+    "MDPI"
+  ],
+  "compoundOrganizations": [
+    "IEEE/ACM",
+    "ACM/IEEE",
+    "IEEE/CVF",
+    "IEEE/RSJ"
+  ],
+  "preserveTokens": [
+    "IEEE",
+    "ACM",
+    "CVF",
+    "RSJ",
+    "MDPI",
+    "AI",
+    "IoT"
+  ]
+}

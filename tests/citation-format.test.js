@@ -102,13 +102,18 @@ test('MDPI standard_abbr matches current output', async () => {
     assert.equal(result.suggestionError, '');
 });
 
-// TODO Goal 2: fix MDPI simplest_abbr runtime bug
-test.skip('MDPI simplest_abbr is skipped pending Goal 2 runtime bug fix', async () => {
-    await formatMdpiCitation(
+test('MDPI simplest_abbr matches current output', async () => {
+    const result = await formatMdpiCitation(
         readJsonFixture('mdpi-article.json'),
         baseSettings(),
         'simplest_abbr'
     );
+
+    assert.equal(
+        result.citationText,
+        "Satellite Sensing for Smart Agriculture (24'Remote Sens.)"
+    );
+    assert.equal(result.suggestionError, '');
 });
 
 test('arXiv full citation matches current output', async () => {

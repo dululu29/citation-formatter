@@ -1,5 +1,26 @@
 // --- Constants and Configuration ---
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
+const abbreviationResolverApi = (() => {
+    if (typeof module !== 'undefined' && module.exports) {
+        return require('./src/abbreviations/resolver');
+    }
+
+    const namespace = globalThis.CitationFormatterAbbreviations || (globalThis.CitationFormatterAbbreviations = {});
+    if (typeof importScripts === 'function' && !namespace.resolver) {
+        importScripts(
+            'src/abbreviations/normalizeTitle.js',
+            'src/abbreviations/sources/customSource.js',
+            'src/abbreviations/sources/metadataSource.js',
+            'src/abbreviations/sources/geminiSource.js',
+            'src/abbreviations/journalRules.js',
+            'src/abbreviations/conferenceResolver.js',
+            'src/abbreviations/resolver.js'
+        );
+    }
+
+    return namespace.resolver;
+})();
+const { resolvePublicationAbbreviation } = abbreviationResolverApi;
 
 // --- Abbreviation Dictionaries ---
 const standardJournalAbbreviations = {
@@ -500,141 +521,22 @@ function normalizeAndPrefixConferenceName(confNameFromAbbrStyle, originalFullNam
  * Internal styles: 'custom', 'standard', 'short', 'none'.
  * This function is now more focused, the choice of which internal style to use is made by the caller (formatXyzCitation).
  */
-async function getAbbreviationByInternalStyle(originalName, isConference, internalStyleTarget, settings) {
-    const customAbbrs = settings.customAbbreviations || {};
-    const useGemini = settings.useGemini;
-    const apiKey = settings.geminiApiKey;
+async function getAbbreviationByInternalStyle(originalName, isConference, internalStyleTarget, settings, options = {}) {
+    const result = await resolvePublicationAbbreviation({
+        customAbbreviations: settings.customAbbreviations || {},
+        fullTitle: originalName,
+        geminiApiKey: settings.geminiApiKey,
+        metadataAbbrev: options.metadataAbbrev || '',
+        sourceType: isConference ? 'conference' : 'journal',
+        style: internalStyleTarget,
+        suggestViaGemini: suggestAbbreviationViaGemini,
+        useGemini: settings.useGemini
+    });
 
-    console.log(`Getting abbreviation for "${originalName}" using internal style: ${internalStyleTarget}`);
-
-    let abbreviation = originalName;
-    let suggestionError = '';
-    let found = false;
-
-    if (internalStyleTarget === 'none') {
-        return { abbreviation: originalName, suggestionError: '' };
-    }
-
-    // 1. Check Custom
-    if (internalStyleTarget === 'custom' && customAbbrs[originalName]) {
-        abbreviation = customAbbrs[originalName];
-        found = true;
-        console.log(`Internal style 'custom': Found custom abbreviation: ${abbreviation}`);
-    }
-
-    // 2. Check Standard if style is 'standard'
-    if (!found && (internalStyleTarget === 'standard' || internalStyleTarget === 'short')) {
-        const stdAbbrDict = isConference ? standardConferenceAbbreviations : standardJournalAbbreviations;
-        let foundStdAbbrKey = null;
-        const keys = Object.keys(stdAbbrDict);
-
-        if (isConference) {
-            const originalNameLower = originalName.toLowerCase();
-            // 嘗試從原始名稱中提取括號內的縮寫，例如 (MASS)
-            const parentheticalMatch = originalName.match(/\(([^)]+)\)/);
-            const potentialAcronymInParentheses = parentheticalMatch && parentheticalMatch[1] ? parentheticalMatch[1].toLowerCase() : null;
-
-            foundStdAbbrKey = keys.find(key => {
-                const keyLower = key.toLowerCase();
-                // 1. 嘗試字典的 key 是否包含在原始名稱中（移除年份和届数後）
-                const cleanOriginalNameForLooseMatch = originalNameLower
-                    .replace(/\b\d{1,3}(st|nd|rd|th)\b/gi, '')
-                    .replace(/\b\d{4}\b/g, '').replace(/\s\s+/g, ' ').trim();
-                if (cleanOriginalNameForLooseMatch.includes(keyLower)) return true;
-
-                // 2. 如果原始名稱中有括號縮寫，看字典的值（標準縮寫）是否包含這個括號縮寫
-                //    例如 originalName: "... (MASS)", 字典值: "IEEE MASS"
-                if (potentialAcronymInParentheses && stdAbbrDict[key].toLowerCase().includes(potentialAcronymInParentheses)) {
-                    return true;
-                }
-                return false;
-            });
-        } else { // Journal (保持之前的邏輯)
-            foundStdAbbrKey = keys.find(key => originalName === key);
-            if (!foundStdAbbrKey) {
-                const nameWithoutIEEE = originalName.replace(/^IEEE\s*?\/?\s*/i, '');
-                foundStdAbbrKey = keys.find(key => nameWithoutIEEE === key);
-            }
-        }
-        const stdAbbrValue = foundStdAbbrKey ? stdAbbrDict[foundStdAbbrKey] : null;
-
-        if (stdAbbrValue) {
-            abbreviation = stdAbbrValue;
-            found = true;
-            console.log(`Internal style 'standard': Found standard abbreviation: ${abbreviation}`);
-        }
-    }
-
-    // 3. Check Short if style is 'short'
-    if (!found && internalStyleTarget === 'short') {
-        const stdAbbrDict = isConference ? standardConferenceAbbreviations : standardJournalAbbreviations;
-        let stdAbbrValueForShortLookup = null;
-
-        // First, try to get the standard abbreviation to then look up its short form
-        let foundStdKeyForShort = null;
-        const keysStd = Object.keys(stdAbbrDict);
-        if (isConference) {
-            foundStdKeyForShort = keysStd.find(key => originalName.toLowerCase().includes(key.toLowerCase()));
-        } else {
-            foundStdKeyForShort = keysStd.find(key => originalName === key);
-            if (!foundStdKeyForShort) {
-                const nameWithoutIEEE = originalName.replace(/^IEEE\s*?\/?\s*/i, '');
-                foundStdKeyForShort = keysStd.find(key => nameWithoutIEEE === key);
-            }
-        }
-        if (foundStdKeyForShort) {
-            stdAbbrValueForShortLookup = stdAbbrDict[foundStdKeyForShort];
-        }
-
-        if (stdAbbrValueForShortLookup && shortAbbreviations[stdAbbrValueForShortLookup]) {
-            abbreviation = shortAbbreviations[stdAbbrValueForShortLookup];
-            found = true;
-            console.log(`Internal style 'short': Found short abbreviation via standard mapping ('${stdAbbrValueForShortLookup}'): ${abbreviation}`);
-        } else if (shortAbbreviations[originalName]) { // Direct short lookup if originalName is already a standard abbr.
-            abbreviation = shortAbbreviations[originalName];
-            found = true;
-            console.log(`Internal style 'short': Found direct short abbreviation: ${abbreviation}`);
-        }
-    }
-
-    // --- Fallback Chain (if no match found based on internalStyleTarget) ---
-    // Ensure the Gemini call uses originalName (your provided file is correct here)
-    if (!found) {
-        console.log(`Internal style '${internalStyleTarget}': No direct match. Trying fallbacks...`);
-        const abbrMatch = originalName.match(/\(([^)]+)\)\s*$/);
-        if (abbrMatch) {
-            // ... (parenthesis extraction logic)
-        }
-
-        if (!found) {
-            try {
-                const geminiSuggestion = await suggestAbbreviationViaGemini(originalName, isConference, apiKey, useGemini);
-                if (geminiSuggestion && geminiSuggestion !== originalName && geminiSuggestion !== fallbackAbbreviation(originalName, isConference)) {
-                    abbreviation = geminiSuggestion;
-                    // found = true; // Consider if Gemini providing anything different is 'found'
-                } else if (abbreviation === originalName) {
-                    abbreviation = fallbackAbbreviation(originalName, isConference);
-                }
-                console.log(`Fallback: Gemini suggestion result: ${abbreviation}`);
-            } catch (suggError) {
-                // ... (error handling for Gemini)
-                if (abbreviation === originalName) { // Ensure fallback if Gemini errors and no prior match
-                    abbreviation = fallbackAbbreviation(originalName, isConference);
-                }
-            }
-        }
-        if (abbreviation === originalName && !found) { // Final fallback if nothing else worked
-            abbreviation = fallbackAbbreviation(originalName, isConference);
-        }
-    }
-
-
-    if ((!abbreviation || abbreviation === 'N/A') && originalName && originalName !== 'N/A') {
-        abbreviation = originalName;
-    } else if (!abbreviation) {
-        abbreviation = 'N/A';
-    }
-    return { abbreviation, suggestionError };
+    return {
+        abbreviation: result.abbreviation || originalName || 'N/A',
+        suggestionError: ''
+    };
 }
 
 /**
@@ -1110,6 +1012,7 @@ async function formatMdpiCitation(metadata, settings, currentStyleKey) { // ADDE
     const authorsList = Array.isArray(metadata.authors) ? metadata.authors : (metadata.authors ? [metadata.authors] : []);
     const title = metadata.title || 'N/A';
     const originalJournalTitle = metadata.journalTitle || 'N/A';
+    const metadataJournalAbbrev = metadata.journalAbbrev || '';
     const volume = metadata.volume || '';
     const articleNumber = metadata.firstpage || ''; // MDPI often uses this as article ID
     // const doi = metadata.doi || ''; 
@@ -1168,46 +1071,18 @@ async function formatMdpiCitation(metadata, settings, currentStyleKey) { // ADDE
 
     let citationText = '';
     let finalSuggestionError = '';
-    let pubName = metadata.journalTitle || 'N/A';
+    let pubName = originalJournalTitle;
 
     if (currentStyleKey === 'simplest_abbr') {
-        const shortResult = await getAbbreviationByInternalStyle(originalPubName, isConference, 'short', settings);
-        let pubAbbrForSimplest = shortResult.abbreviation;
+        const shortResult = await getAbbreviationByInternalStyle(
+            originalJournalTitle,
+            false,
+            'short',
+            settings,
+            { metadataAbbrev: metadataJournalAbbrev }
+        );
+        const pubAbbrForSimplest = shortResult.abbreviation;
         finalSuggestionError = shortResult.suggestionError;
-
-        if (isConference) {
-            // 對於 simplest_abbr 中的會議縮寫，我們也需要清理掉年份和届数，
-            // 並嘗試獲取核心縮寫，例如 (VTC2024-Spring) 或 MASS
-            let tempConfName = pubAbbrForSimplest;
-            if (pubAbbrForSimplest === originalPubName || pubAbbrForSimplest === fallbackAbbreviation(originalPubName, isConference)) { // 如果是原始名或通用fallback
-                tempConfName = originalPubName; // 從原始名開始清理
-            }
-
-            const parentheticalMatchSimple = tempConfName.match(/\(([^)]+)\)/);
-            if (parentheticalMatchSimple && parentheticalMatchSimple[1] && /^[A-Z0-9-]+$/.test(parentheticalMatchSimple[1])) {
-                pubAbbrForSimplest = parentheticalMatchSimple[1]; // 例如 VTC2024-Spring or MASS
-            } else {
-                // 如果沒有括號內的明確縮寫，進行基本清理
-                tempConfName = tempConfName.replace(/\b\d{1,3}(st|nd|rd|th)\b\s*/gi, '');
-                tempConfName = tempConfName.replace(/(^|\s)\b\d{4}\b(\s*-\s*\d{2,4})?(\s|,|$|(?=[A-Z\-(]))/g, '$1').trim();
-                tempConfName = tempConfName.replace(/\s\s+/g, ' ').trim();
-                // 嘗試從清理後的名稱中提取一個簡短的縮寫 (這部分邏輯可以很複雜，暫時簡化)
-                const words = tempConfName.split(" ");
-                if (words.length > 3 && tempConfName.toLowerCase().includes("conference")) { // 如果詞太多，嘗試首字母
-                    pubAbbrForSimplest = words.filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('');
-                    if (pubAbbrForSimplest.length < 2 || pubAbbrForSimplest.length > 5) pubAbbrForSimplest = words[0]; // 如果首字母縮寫效果不好
-                } else {
-                    pubAbbrForSimplest = tempConfName.split(/[\s-]+/)[0]; // 取第一個詞作為非常簡化的縮寫
-                }
-            }
-            // 確保 IEEE (如果適用且縮寫本身不含)
-            if (originalPubName.toLowerCase().includes("ieee") && !pubAbbrForSimplest.toLowerCase().includes("ieee")) {
-                pubAbbrForSimplest = "IEEE " + pubAbbrForSimplest;
-            }
-            pubAbbrForSimplest = pubAbbrForSimplest.replace(/\s*IEEE\s+IEEE\s*/gi, 'IEEE ');
-
-
-        }
 
         citationText = twoDigitYear
             ? `${title} (${twoDigitYear}'${pubAbbrForSimplest})`
@@ -1228,7 +1103,13 @@ async function formatMdpiCitation(metadata, settings, currentStyleKey) { // ADDE
         else if (currentStyleKey === 'custom_list_abbr') internalAbbrTarget = 'custom';
         else internalAbbrTarget = 'short';
 
-        const abbrResult = await getAbbreviationByInternalStyle(pubName, false, internalAbbrTarget, settings);
+        const abbrResult = await getAbbreviationByInternalStyle(
+            pubName,
+            false,
+            internalAbbrTarget,
+            settings,
+            { metadataAbbrev: metadataJournalAbbrev }
+        );
         pubName = abbrResult.abbreviation; // This is the (potentially) abbreviated journal title
         finalSuggestionError = abbrResult.suggestionError;
 
@@ -1381,6 +1262,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getTwoDigitYear,
         normalizeConferenceNameForDisplay,
         parseBibtex,
+        resolvePublicationAbbreviation,
         shortAbbreviations,
         standardConferenceAbbreviations,
         standardJournalAbbreviations

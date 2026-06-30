@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./dist/output.css",
     "build:watch": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./dist/output.css --watch",
-    "test": "node --test tests/citation-format.test.js"
+    "test": "node --test tests/*.test.js"
   },
   "keywords": [],
   "author": "",

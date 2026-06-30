@@ -19,6 +19,7 @@ Effortlessly format citations from IEEE Xplore, arXiv, and MDPI. This tool extra
 * **Manual Copy:** Provides copy buttons within the popup for each displayed citation.
 * **User-Friendly Popup:** Displays status, formatted citations, and copy buttons.
 * **Configurable Options Page:** Allows customization of API keys, abbreviation styles, auto-copy behavior, and custom abbreviations.
+* **Resolver Documentation:** See [docs/abbreviation-resolution.md](/Users/yo/GithubProjects/citation-formatter/docs/abbreviation-resolution.md) for the abbreviation resolver design and extension points.
 
 ## Supported Websites
 
@@ -86,5 +87,4 @@ Access the extension's settings by:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or open issues. (Add more specific contribution guidelines if desired).
-
 
