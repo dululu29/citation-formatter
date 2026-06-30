@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "background.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./dist/output.css",
+    "build:watch": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/input.css -o ./dist/output.css --watch",
+    "test": "node --test tests/citation-format.test.js"
   },
   "keywords": [],
   "author": "",

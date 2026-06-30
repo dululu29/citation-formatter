@@ -2,29 +2,29 @@
 
 ## Description
 
-Effortlessly format citations from IEEE Xplore and arXiv. This tool extracts metadata and generates citations in standard IEEE format or a compact PowerPoint style (Title YY'Abbr). Customize abbreviation handling: use standard IEEE, built-in short names, your own custom list, or none. Optionally leverages Gemini AI for unknown abbreviations and auto-copies results.
+Effortlessly format citations from IEEE Xplore, arXiv, and MDPI. This tool extracts metadata and generates citations using the currently selected citation styles, including standard abbreviations, simplest abbreviations, custom abbreviations, or no abbreviation. Optionally leverages Gemini AI for unknown abbreviations and auto-copies results.
 
 ## Features
 
-* **Fetches Citations:** Automatically extracts metadata from active IEEE Xplore and arXiv tabs.
-* **Multiple Display Modes:**
-    * **Full Mode:** Standard IEEE citation format.
-    * **PowerPoint Mode:** Compact `Title (YY'Abbr)` format suitable for presentations.
-    * **Show Both:** Displays both formats in the popup.
+* **Fetches Citations:** Automatically extracts metadata from active IEEE Xplore, arXiv, and MDPI tabs.
+* **Multiple Citation Styles:** Display one or more selected citation styles in the popup.
 * **Configurable Abbreviations:**
-    * **Full Mode Style:** Choose between No Abbreviation, Standard IEEE Abbreviations, or your Custom Abbreviation list.
-    * **PowerPoint Mode Style:** Choose between Short Abbreviations (built-in defaults) or your Custom Abbreviation list.
+    * **No Abbreviation**
+    * **Standard Abbreviation**
+    * **Simplest Abbreviation**
+    * **Custom Abbreviation List**
 * **Custom Abbreviations:** Manage your own list of publication abbreviations via JSON in the options page.
 * **Optional Gemini Suggestions:** If enabled and an API key is provided, uses Google Gemini to suggest abbreviations for unknown publications. Falls back to built-in logic if disabled or unavailable.
-* **Auto-Copy:** Optionally copies the generated citation (Full format if 'Both' display mode is selected) to the clipboard automatically.
-* **Manual Copy:** Provides copy buttons within the popup for each displayed format.
+* **Auto-Copy:** Optionally copies the first selected citation style to the clipboard automatically.
+* **Manual Copy:** Provides copy buttons within the popup for each displayed citation.
 * **User-Friendly Popup:** Displays status, formatted citations, and copy buttons.
-* **Configurable Options Page:** Allows customization of API keys, display modes, abbreviation styles, auto-copy behavior, and custom abbreviations.
+* **Configurable Options Page:** Allows customization of API keys, abbreviation styles, auto-copy behavior, and custom abbreviations.
 
 ## Supported Websites
 
 * IEEE Xplore (`ieeexplore.ieee.org/document/...`)
 * arXiv (`arxiv.org/abs/...`, `arxiv.org/pdf/...`)
+* MDPI (`*.mdpi.com/...`)
 
 ## Installation (from Chrome Web Store)
 
@@ -68,26 +68,23 @@ Access the extension's settings by:
     * **Gemini API Key:** (Optional) Enter your Google AI Studio API key if you want to use Gemini for abbreviation suggestions.
     * **Use Gemini:** Enable/disable the Gemini suggestion feature.
     * **Automatically Copy Citation:** Enable/disable automatic copying to the clipboard.
-    * **Citation Display Mode (Popup):** Choose how citations appear in the popup (Full, PowerPoint, Both).
-    * **Abbreviation Style (Full Mode):** Select the abbreviation style for the standard citation format (None, Standard IEEE, Use Custom List).
-    * **Abbreviation Style (PowerPoint Mode):** Select the abbreviation style for the PowerPoint format (Short Default, Use Custom List).
+    * **Citation Styles:** Select one or more styles to display in the popup (No Abbreviation, Standard Abbreviation, Simplest Abbreviation, Custom List).
 * **Custom Abbreviations Tab:**
     * Manage your custom list of abbreviations in JSON format (e.g., `{"Full Journal Name": "My Abbr"}`).
-    * Save your custom list. This list is used when "Use Custom List" is selected in the configuration tab.
+    * Save your custom list. This list is used when "Custom List" is selected in the configuration tab.
 * **About Tab:** Shows the extension version and copyright information.
 
 ## Usage
 
-1.  Navigate to a supported IEEE Xplore or arXiv article page.
+1.  Navigate to a supported IEEE Xplore, arXiv, or MDPI article page.
 2.  Click the "Citation Formatter" icon in your Chrome toolbar (you may need to pin it first using the puzzle icon).
 3.  The popup will appear, showing the status ("Fetching citation...").
-4.  Once fetched, the citation(s) will be displayed according to your selected "Citation Display Mode" and "Abbreviation Style" settings.
-5.  If "Auto-Copy" is enabled, the relevant citation will be copied to your clipboard automatically.
-6.  You can manually copy either displayed format using the copy buttons next to each citation area.
+4.  Once fetched, the citation(s) will be displayed according to your selected citation style settings.
+5.  If "Auto-Copy" is enabled, the first selected citation style will be copied to your clipboard automatically.
+6.  You can manually copy any displayed citation using the copy buttons next to each citation area.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or open issues. (Add more specific contribution guidelines if desired).
-
 
 

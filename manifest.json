@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Citation Formatter",
-  "version": "1.7", // Incremented version
+  "version": "1.7",
   "description": "Effortlessly format citations from IEEE Xplore, arXiv, and MDPI pages. Supports multiple styles & custom abbreviations. Optional AI suggestions & auto-copy.",
   "permissions": [
     "activeTab",
@@ -12,8 +12,8 @@
   "host_permissions": [
     "*://*.ieeexplore.ieee.org/*",
     "*://*.arxiv.org/*",
-    "*://*.mdpi.com/*",            // Added MDPI permission
-    "https://generativelanguage.googleapis.com/*" // For optional Gemini
+    "*://*.mdpi.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -34,5 +34,5 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none';"
   },
-   "options_page": "options.html"
+  "options_page": "options.html"
 }

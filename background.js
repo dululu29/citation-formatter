@@ -1249,62 +1249,6 @@ async function formatMdpiCitation(metadata, settings, currentStyleKey) { // ADDE
 }
 
 
-// --- Background Script Event Listener ---
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'fetchCitation' && message.url && !sender.tab) {
-        const url = message.url;
-        console.log(`Background: Received fetchCitation request for ${url}`);
-        (async () => {
-            let settings = {};
-            let fetchedMetadata;
-            let results = [];
-
-            try {
-                settings = await getSettings();
-                console.log("Background: Using citation styles:", settings.citationStyles);
-
-                const isMdpi = url.includes('mdpi.com/');
-                const isIeee = url.includes('ieeexplore.ieee.org/document/');
-                const isArxiv = url.includes('arxiv.org/abs/') || url.includes('arxiv.org/pdf/');
-
-                if (isArxiv) {
-                    fetchedMetadata = await getArxivCitation(url);
-                    for (const styleKey of settings.citationStyles) {
-                        const { citationText, suggestionError } = await formatArxivCitation(fetchedMetadata, settings, styleKey);
-                        results.push({ styleKey, citationText, suggestionError });
-                    }
-                } else if (isIeee) {
-                    const ieeeResponse = await getIeeeCitation(url);
-                    fetchedMetadata = ieeeResponse.metadata;
-                    for (const styleKey of settings.citationStyles) {
-                        const { citationText, suggestionError } = await formatIeeeCitation(fetchedMetadata, settings, styleKey);
-                        results.push({ styleKey, citationText, suggestionError });
-                    }
-                } else if (isMdpi) {
-                    fetchedMetadata = await getMdpiCitation(url);
-                    for (const styleKey of settings.citationStyles) {
-                        const { citationText, suggestionError } = await formatMdpiCitation(fetchedMetadata, settings, styleKey);
-                        results.push({ styleKey, citationText, suggestionError });
-                    }
-                } else {
-                    throw new Error("Unsupported URL.");
-                }
-
-                console.log("Formatted citation results:", results);
-                sendResponse({ success: true, citations: results }); // CHANGED: send array
-
-            } catch (error) {
-                console.error("Error processing citation in background:", error);
-                let finalErrorMsg = error.message || "An unknown error occurred.";
-                // ... (error message enhancement remains) ...
-                sendResponse({ success: false, error: finalErrorMsg, citations: [] }); // Send empty array on error
-            }
-        })();
-        return true; // Keep the message channel open for sendResponse
-    }
-    return false;
-});
-
 // --- Lifecycle Events & Offscreen Doc Management ---
 async function closeOffscreenDocument() {
     try {
@@ -1318,53 +1262,127 @@ async function closeOffscreenDocument() {
     } catch (error) { console.error("Error trying to close offscreen document:", error); }
 }
 
-chrome.runtime.onInstalled.addListener(details => {
-    console.log("Extension installed/updated:", details.reason);
-    const defaults = {
-        geminiApiKey: null, useGemini: false, autoCopy: true,
-        citationStyles: ['standard_abbr'], // New default for array
-        customAbbreviations: {}
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+    // --- Background Script Event Listener ---
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'fetchCitation' && message.url && !sender.tab) {
+            const url = message.url;
+            console.log(`Background: Received fetchCitation request for ${url}`);
+            (async () => {
+                let settings = {};
+                let fetchedMetadata;
+                let results = [];
+
+                try {
+                    settings = await getSettings();
+                    console.log("Background: Using citation styles:", settings.citationStyles);
+
+                    const isMdpi = url.includes('mdpi.com/');
+                    const isIeee = url.includes('ieeexplore.ieee.org/document/');
+                    const isArxiv = url.includes('arxiv.org/abs/') || url.includes('arxiv.org/pdf/');
+
+                    if (isArxiv) {
+                        fetchedMetadata = await getArxivCitation(url);
+                        for (const styleKey of settings.citationStyles) {
+                            const { citationText, suggestionError } = await formatArxivCitation(fetchedMetadata, settings, styleKey);
+                            results.push({ styleKey, citationText, suggestionError });
+                        }
+                    } else if (isIeee) {
+                        const ieeeResponse = await getIeeeCitation(url);
+                        fetchedMetadata = ieeeResponse.metadata;
+                        for (const styleKey of settings.citationStyles) {
+                            const { citationText, suggestionError } = await formatIeeeCitation(fetchedMetadata, settings, styleKey);
+                            results.push({ styleKey, citationText, suggestionError });
+                        }
+                    } else if (isMdpi) {
+                        fetchedMetadata = await getMdpiCitation(url);
+                        for (const styleKey of settings.citationStyles) {
+                            const { citationText, suggestionError } = await formatMdpiCitation(fetchedMetadata, settings, styleKey);
+                            results.push({ styleKey, citationText, suggestionError });
+                        }
+                    } else {
+                        throw new Error("Unsupported URL.");
+                    }
+
+                    console.log("Formatted citation results:", results);
+                    sendResponse({ success: true, citations: results }); // CHANGED: send array
+
+                } catch (error) {
+                    console.error("Error processing citation in background:", error);
+                    let finalErrorMsg = error.message || "An unknown error occurred.";
+                    // ... (error message enhancement remains) ...
+                    sendResponse({ success: false, error: finalErrorMsg, citations: [] }); // Send empty array on error
+                }
+            })();
+            return true; // Keep the message channel open for sendResponse
+        }
+        return false;
+    });
+
+    chrome.runtime.onInstalled.addListener(details => {
+        console.log("Extension installed/updated:", details.reason);
+        const defaults = {
+            geminiApiKey: null, useGemini: false, autoCopy: true,
+            citationStyles: ['standard_abbr'], // New default for array
+            customAbbreviations: {}
+        };
+        if (details.reason === "install") {
+            chrome.storage.sync.set(defaults, () => { /* ... */ });
+        } else if (details.reason === "update") {
+            chrome.storage.sync.get(null, (items) => {
+                const settingsToSet = { ...defaults };
+                Object.assign(settingsToSet, items);
+
+                let keysToRemove = [];
+                if (items.hasOwnProperty('fullModeAbbrStyle')) keysToRemove.push('fullModeAbbrStyle');
+                if (items.hasOwnProperty('pptModeAbbrStyle')) keysToRemove.push('pptModeAbbrStyle');
+                if (items.hasOwnProperty('abbreviationStyle')) keysToRemove.push('abbreviationStyle');
+                if (items.hasOwnProperty('citationMode')) keysToRemove.push('citationMode'); // Remove old citationMode
+
+                // Ensure citationStyles is an array, migrate if old citationStyle (single string) exists
+                if (items.citationStyle && typeof items.citationStyle === 'string' && !items.citationStyles) {
+                    // Simple migration: map old single style to new array key
+                    let newStyleKey = 'standard_abbr'; // default
+                    if (items.citationStyle === 'standard_ieee') newStyleKey = 'standard_abbr';
+                    else if (items.citationStyle === 'abbreviate_pub') newStyleKey = 'standard_abbr'; // Or map to a new 'short_explicit_abbr' if you add one
+                    else if (items.citationStyle === 'simplest_t_y_p') newStyleKey = 'simplest_abbr';
+                    else if (items.citationStyle === 'no_abbr') newStyleKey = 'no_abbr';
+                    else if (items.citationStyle === 'custom_list') newStyleKey = 'custom_list_abbr';
+                    settingsToSet.citationStyles = [newStyleKey];
+                } else if (!Array.isArray(settingsToSet.citationStyles) || settingsToSet.citationStyles.length === 0) {
+                    settingsToSet.citationStyles = defaults.citationStyles;
+                }
+                if (items.hasOwnProperty('citationStyle')) keysToRemove.push('citationStyle'); // Remove old single string citationStyle
+
+                if (keysToRemove.length > 0) {
+                    chrome.storage.sync.remove(keysToRemove, () => { /* ... */ });
+                }
+                chrome.storage.sync.set(settingsToSet, () => { /* ... */ });
+            });
+        }
+        closeOffscreenDocument();
+    });
+
+    chrome.runtime.onStartup.addListener(() => {
+        console.log("Extension started up via browser startup.");
+        closeOffscreenDocument();
+    });
+
+    console.log("Background service worker started/awoken.");
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        fallbackAbbreviation,
+        formatArxivCitation,
+        formatIeeeCitation,
+        formatMdpiCitation,
+        getAbbreviationByInternalStyle,
+        getTwoDigitYear,
+        normalizeConferenceNameForDisplay,
+        parseBibtex,
+        shortAbbreviations,
+        standardConferenceAbbreviations,
+        standardJournalAbbreviations
     };
-    if (details.reason === "install") {
-        chrome.storage.sync.set(defaults, () => { /* ... */ });
-    } else if (details.reason === "update") {
-        chrome.storage.sync.get(null, (items) => {
-            const settingsToSet = { ...defaults };
-            Object.assign(settingsToSet, items);
-
-            let keysToRemove = [];
-            if (items.hasOwnProperty('fullModeAbbrStyle')) keysToRemove.push('fullModeAbbrStyle');
-            if (items.hasOwnProperty('pptModeAbbrStyle')) keysToRemove.push('pptModeAbbrStyle');
-            if (items.hasOwnProperty('abbreviationStyle')) keysToRemove.push('abbreviationStyle');
-            if (items.hasOwnProperty('citationMode')) keysToRemove.push('citationMode'); // Remove old citationMode
-
-            // Ensure citationStyles is an array, migrate if old citationStyle (single string) exists
-            if (items.citationStyle && typeof items.citationStyle === 'string' && !items.citationStyles) {
-                // Simple migration: map old single style to new array key
-                let newStyleKey = 'standard_abbr'; // default
-                if (items.citationStyle === 'standard_ieee') newStyleKey = 'standard_abbr';
-                else if (items.citationStyle === 'abbreviate_pub') newStyleKey = 'standard_abbr'; // Or map to a new 'short_explicit_abbr' if you add one
-                else if (items.citationStyle === 'simplest_t_y_p') newStyleKey = 'simplest_abbr';
-                else if (items.citationStyle === 'no_abbr') newStyleKey = 'no_abbr';
-                else if (items.citationStyle === 'custom_list') newStyleKey = 'custom_list_abbr';
-                settingsToSet.citationStyles = [newStyleKey];
-            } else if (!Array.isArray(settingsToSet.citationStyles) || settingsToSet.citationStyles.length === 0) {
-                settingsToSet.citationStyles = defaults.citationStyles;
-            }
-            if (items.hasOwnProperty('citationStyle')) keysToRemove.push('citationStyle'); // Remove old single string citationStyle
-
-            if (keysToRemove.length > 0) {
-                chrome.storage.sync.remove(keysToRemove, () => { /* ... */ });
-            }
-            chrome.storage.sync.set(settingsToSet, () => { /* ... */ });
-        });
-    }
-    closeOffscreenDocument();
-});
-
-chrome.runtime.onStartup.addListener(() => {
-    console.log("Extension started up via browser startup.");
-    closeOffscreenDocument();
-});
-
-console.log("Background service worker started/awoken.");
+}
