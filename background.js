@@ -835,6 +835,7 @@ async function getIeeeMetadataFromActiveTab(tabId) {
     try {
         const injectionResults = await chrome.scripting.executeScript({
             target: { tabId },
+            world: 'MAIN',
             func: () => {
                 const raw = window.xplGlobal?.document?.metadata;
                 if (!raw || typeof raw !== 'object') {
@@ -899,7 +900,7 @@ async function getIeeeMetadataFromActiveTab(tabId) {
         console.log("Background: Loaded IEEE metadata from active tab.");
         return normalizedMetadata;
     } catch (error) {
-        console.log("Background: Active-tab IEEE metadata unavailable; falling back to offscreen.");
+        console.warn("Background: Active-tab IEEE metadata extraction failed:", error?.message || error);
         return null;
     }
 }
