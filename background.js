@@ -1,5 +1,17 @@
 // --- Constants and Configuration ---
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
+const urlParserApi = (() => {
+    if (typeof module !== 'undefined' && module.exports) {
+        return require('./src/url/parseSupportedUrl');
+    }
+
+    const namespace = globalThis.CitationFormatterUrl || (globalThis.CitationFormatterUrl = {});
+    if (typeof importScripts === 'function' && !namespace.parseSupportedUrl) {
+        importScripts('src/url/parseSupportedUrl.js');
+    }
+
+    return namespace;
+})();
 const ieeeMetadataParserApi = (() => {
     if (typeof module !== 'undefined' && module.exports) {
         return require('./src/ieee/metadataParser');
@@ -32,6 +44,7 @@ const abbreviationResolverApi = (() => {
 
     return namespace.resolver;
 })();
+const { parseSupportedUrl } = urlParserApi;
 const { normalizeIeeeActiveTabMetadata } = ieeeMetadataParserApi;
 const { resolvePublicationAbbreviation } = abbreviationResolverApi;
 
@@ -221,6 +234,19 @@ function getTwoDigitYear(dateStr) {
         }
     } catch (e) { /* Ignore parsing errors */ }
     return '';
+}
+
+function formatMonthYear(monthIndex, year) {
+    const monthAbbreviations = [
+        'Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.',
+        'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'
+    ];
+
+    if (monthIndex < 0 || monthIndex > 11) {
+        return String(year);
+    }
+
+    return `${monthAbbreviations[monthIndex]} ${year}`;
 }
 
 async function suggestAbbreviationViaGemini(name, isConference, apiKey, useGemini) {
@@ -712,11 +738,16 @@ function parseBibtex(bibtexContent) {
 }
 
 
-async function getArxivCitation(url) {
+async function getArxivCitation(urlOrId) {
     // (This function remains the same as in the original file)
-    const paperIdMatch = url.match(/arxiv\.org\/(?:abs|pdf|html|ps)\/([\d.]+)/);
-    if (!paperIdMatch) throw new Error("Could not extract paper ID from arXiv URL.");
-    const paperId = paperIdMatch[1];
+    const parsedUrl = typeof urlOrId === 'string' ? parseSupportedUrl(urlOrId) : null;
+    const directIdMatch = typeof urlOrId === 'string'
+        ? urlOrId.trim().match(/^(\d{4}\.\d{4,5}(?:v\d+)?)$/)
+        : null;
+    const paperId = parsedUrl?.site === 'arxiv' ? parsedUrl.arxivId : (directIdMatch?.[1] || '');
+
+    if (!paperId) throw new Error("Could not extract paper ID from arXiv URL.");
+
     const bibtexUrl = `https://arxiv.org/bibtex/${paperId}`;
     try {
         const controller = new AbortController();
@@ -960,8 +991,7 @@ async function formatIeeeCitation(metadata, settings, currentStyleKey) {
                 } else {
                     const monthIndex = dateObj.getMonth();
                     if (monthIndex >= 0 && monthIndex <= 11) {
-                        const month = dateObj.toLocaleString('en-US', { month: 'short' });
-                        formattedDate = `${month}. ${year}`;
+                        formattedDate = formatMonthYear(monthIndex, year);
                     } else {
                         formattedDate = year.toString();
                         console.warn("Parsed invalid month, using year only for:", pubDateStr);
@@ -1134,9 +1164,7 @@ async function formatMdpiCitation(metadata, settings, currentStyleKey) { // ADDE
                 const monthIndex = parseInt(dateParts[1], 10) - 1;
                 twoDigitYear = year.slice(-2);
                 if (monthIndex >= 0 && monthIndex <= 11) {
-                    const tempDate = new Date(parseInt(year, 10), monthIndex);
-                    const month = tempDate.toLocaleString('en-US', { month: 'short' });
-                    formattedDate = `${month}. ${year}`;
+                    formattedDate = formatMonthYear(monthIndex, year);
                 } else { formattedDate = year; }
             } else {
                 const yearMatch = pubDateStr.match(/\b(\d{4})\b/);
@@ -1233,9 +1261,9 @@ async function closeOffscreenDocument() {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
     // --- Background Script Event Listener ---
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.action === 'fetchCitation' && message.url && !sender.tab) {
-            const url = message.url;
-            console.log(`Background: Received fetchCitation request for ${url}`);
+        if (message.action === 'fetchCitation' && (message.url || message.originalUrl) && !sender.tab) {
+            const receivedUrl = message.url || message.originalUrl;
+            console.log(`Background: Received fetchCitation request for ${receivedUrl}`);
             (async () => {
                 let settings = {};
                 let fetchedMetadata;
@@ -1245,23 +1273,32 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
                     settings = await getSettings();
                     console.log("Background: Using citation styles:", settings.citationStyles);
 
-                    const isMdpi = url.includes('mdpi.com/');
-                    const isIeee = url.includes('ieeexplore.ieee.org/document/');
-                    const isArxiv = url.includes('arxiv.org/abs/') || url.includes('arxiv.org/pdf/');
+                    const parsedMessageUrl = parseSupportedUrl(message.originalUrl || message.url);
+                    const routingInfo = {
+                        site: message.site || parsedMessageUrl?.site || null,
+                        originalUrl: message.originalUrl || parsedMessageUrl?.originalUrl || receivedUrl,
+                        canonicalUrl: message.url || parsedMessageUrl?.canonicalUrl || receivedUrl,
+                        documentId: message.documentId || parsedMessageUrl?.documentId || '',
+                        arxivId: message.arxivId || parsedMessageUrl?.arxivId || ''
+                    };
 
-                    if (isArxiv) {
-                        fetchedMetadata = await getArxivCitation(url);
+                    if (!routingInfo.site) {
+                        throw new Error("Unsupported URL.");
+                    }
+
+                    if (routingInfo.site === 'arxiv') {
+                        fetchedMetadata = await getArxivCitation(routingInfo.arxivId || routingInfo.canonicalUrl);
                         for (const styleKey of settings.citationStyles) {
                             const { citationText, suggestionError } = await formatArxivCitation(fetchedMetadata, settings, styleKey);
                             results.push({ styleKey, citationText, suggestionError });
                         }
-                    } else if (isIeee) {
+                    } else if (routingInfo.site === 'ieee') {
                         if (message.tabId) {
                             fetchedMetadata = await getIeeeMetadataFromActiveTab(message.tabId);
                         }
 
                         if (!fetchedMetadata) {
-                            const ieeeResponse = await getIeeeCitation(url);
+                            const ieeeResponse = await getIeeeCitation(routingInfo.canonicalUrl);
                             fetchedMetadata = ieeeResponse.metadata;
                         }
 
@@ -1269,8 +1306,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
                             const { citationText, suggestionError } = await formatIeeeCitation(fetchedMetadata, settings, styleKey);
                             results.push({ styleKey, citationText, suggestionError });
                         }
-                    } else if (isMdpi) {
-                        fetchedMetadata = await getMdpiCitation(url);
+                    } else if (routingInfo.site === 'mdpi') {
+                        fetchedMetadata = await getMdpiCitation(routingInfo.canonicalUrl);
                         for (const styleKey of settings.citationStyles) {
                             const { citationText, suggestionError } = await formatMdpiCitation(fetchedMetadata, settings, styleKey);
                             results.push({ styleKey, citationText, suggestionError });
@@ -1349,6 +1386,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         fallbackAbbreviation,
+        formatMonthYear,
         formatArxivCitation,
         formatIeeeCitation,
         formatMdpiCitation,

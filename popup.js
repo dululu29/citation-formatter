@@ -1,5 +1,7 @@
 // popup.js
 
+const parseSupportedUrl = globalThis.CitationFormatterUrl?.parseSupportedUrl;
+
 // --- Global DOM Element References ---
 let loadingIndicatorElement, statusMessageElement, statusContainerElement,
     citationsDisplayAreaElement;
@@ -225,6 +227,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLoadingState("Fetching citation...");
 
     try {
+        if (typeof parseSupportedUrl !== 'function') {
+            throw new Error('URL parser helper failed to load.');
+        }
+
         const settings = await chrome.storage.sync.get({
             autoCopy: true,
             citationStyles: ['standard_abbr'] // Default matches options.js
@@ -240,18 +246,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
             showFinalStatus("Works on http/https pages only.", false); return;
         }
-        const isIeee = url.includes('ieeexplore.ieee.org/document/');
-        const isArxiv = url.includes('arxiv.org/abs/') || url.includes('arxiv.org/pdf/');
-        const isMdpi = url.includes('mdpi.com/');
-        if (!isIeee && !isArxiv && !isMdpi) {
+        const parsed = parseSupportedUrl(url);
+        if (!parsed) {
             showFinalStatus("Unsupported site. Use on IEEE, arXiv, or MDPI.", false); return;
         }
 
-        console.log("Sending fetchCitation to background for URL:", url);
+        console.log("Sending fetchCitation to background for URL:", parsed.canonicalUrl);
         const response = await chrome.runtime.sendMessage({
             action: 'fetchCitation',
+            arxivId: parsed.arxivId,
+            documentId: parsed.documentId,
+            originalUrl: parsed.originalUrl,
+            site: parsed.site,
             tabId: tabs[0].id,
-            url: url
+            url: parsed.canonicalUrl
         });
 
         if (chrome.runtime.lastError) {

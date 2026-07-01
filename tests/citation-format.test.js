@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const {
     formatArxivCitation,
+    formatMonthYear,
     formatIeeeCitation,
     formatMdpiCitation,
     parseBibtex
@@ -97,7 +98,7 @@ test('MDPI standard_abbr matches current output', async () => {
 
     assert.equal(
         result.citationText,
-        'A. B. Smith and C. D. Ng, "Satellite Sensing for Smart Agriculture," Remote Sens., vol. 16, Art. no. 12345, May. 2024.'
+        'A. B. Smith and C. D. Ng, "Satellite Sensing for Smart Agriculture," Remote Sens., vol. 16, Art. no. 12345, May 2024.'
     );
     assert.equal(result.suggestionError, '');
 });
@@ -160,4 +161,9 @@ test('custom abbreviation override is applied for IEEE journal citations', async
         'A.B. Smith and C.D. Ng, "Massive MIMO for 6G," MyTWC, vol. 23, no. 3, pp. 100-110, 2024.'
     );
     assert.equal(result.suggestionError, '');
+});
+
+test('formatMonthYear keeps May unpunctuated and August punctuated', () => {
+    assert.equal(formatMonthYear(4, 2024), 'May 2024');
+    assert.equal(formatMonthYear(7, 2024), 'Aug. 2024');
 });
