@@ -1,3 +1,4 @@
+(() => {
 const abbreviationNamespace = globalThis.CitationFormatterAbbreviations || (globalThis.CitationFormatterAbbreviations = {});
 
 const normalizeTitleApi = typeof module !== 'undefined' && module.exports
@@ -244,3 +245,4 @@ abbreviationNamespace.journalRules = api;
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
 }
+})();
