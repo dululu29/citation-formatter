@@ -126,7 +126,24 @@ async function fetchIeeeAndExtractMetadata(url) {
                 throw new Error(restFailureMessage);
             }
 
-            const restJson = await restResponse.json();
+            const restText = await restResponse.text();
+            const looksLikeJson = !!restText && /^[\s\n\r\t]*[{[]/.test(restText);
+            if (!looksLikeJson) {
+                const contentType = restResponse.headers.get('content-type') || 'unknown';
+                const preview = restText.replace(/\s+/g, ' ').slice(0, 200);
+                restFailureMessage = `REST fallback returned non-JSON (status ${restResponse.status}, content-type ${contentType}, text length ${restText.length}, preview "${preview}")`;
+                throw new Error(restFailureMessage);
+            }
+
+            let restJson;
+            try {
+                restJson = JSON.parse(restText);
+            } catch (jsonError) {
+                const contentType = restResponse.headers.get('content-type') || 'unknown';
+                const preview = restText.replace(/\s+/g, ' ').slice(0, 200);
+                restFailureMessage = `REST fallback JSON parse failed (status ${restResponse.status}, content-type ${contentType}, text length ${restText.length}, preview "${preview}")`;
+                throw new Error(restFailureMessage);
+            }
             const normalizedRestMetadata = normalizeIeeeRestMetadata(restJson);
             if (!normalizedRestMetadata) {
                 restFailureMessage = 'REST fallback returned JSON but could not be normalized.';

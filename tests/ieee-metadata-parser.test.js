@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
     extractIeeeMetadataFromHtml,
     extractJsonObjectAfterAssignment,
+    normalizeIeeeActiveTabMetadata,
     normalizeIeeeRestMetadata
 } = require('../src/ieee/metadataParser');
 
@@ -84,6 +85,39 @@ test('normalizes representative IEEE REST response into formatter metadata shape
         endPage: '110',
         articleNumber: '123456',
         contentType: 'Journals'
+    });
+});
+
+test('normalizes live-page IEEE active-tab metadata into formatter metadata shape', () => {
+    const raw = {
+        articleNumber: '10972469',
+        authors: [
+            { preferredName: 'Alice Smith' },
+            { displayName: 'Bob Jones' }
+        ],
+        displayPublicationDate: '2026',
+        displayPublicationTitle: 'IEEE Transactions on Wireless Communications',
+        endPage: '456',
+        formulaStrippedArticleTitle: 'AoI-Aware Interference Mitigation for Task-Oriented Multicasting in Multi-Cell NOMA Networks',
+        issue: '7',
+        publicationYear: '2026',
+        startPage: '445',
+        volume: '25'
+    };
+
+    const normalized = normalizeIeeeActiveTabMetadata(raw);
+
+    assert.deepEqual(normalized, {
+        authors: [{ name: 'Alice Smith' }, { name: 'Bob Jones' }],
+        title: 'AoI-Aware Interference Mitigation for Task-Oriented Multicasting in Multi-Cell NOMA Networks',
+        publicationTitle: 'IEEE Transactions on Wireless Communications',
+        publicationDate: '2026',
+        volume: '25',
+        issue: '7',
+        startPage: '445',
+        endPage: '456',
+        articleNumber: '10972469',
+        contentType: ''
     });
 });
 

@@ -169,7 +169,7 @@
         const source = raw.data && typeof raw.data === 'object' ? raw.data : raw;
         const normalized = {
             authors: normalizeAuthors(source),
-            title: toStringValue(pickFirst(source, ['title', 'articleTitle', 'documentTitle', 'displayTitle'])),
+            title: toStringValue(pickFirst(source, ['title', 'articleTitle', 'documentTitle', 'displayTitle', 'formulaStrippedArticleTitle', 'displayDocTitle'])),
             publicationTitle: toStringValue(pickFirst(source, ['publicationTitle', 'publicationName', 'displayPublicationTitle', 'journalTitle', 'conferenceTitle', 'publisher'])),
             publicationDate: toStringValue(pickFirst(source, ['publicationDate', 'publicationYear', 'date', 'publicationDateFormatted', 'displayPublicationDate', 'coverDate'])),
             volume: toStringValue(pickFirst(source, ['volume'])),
@@ -189,9 +189,37 @@
         return hasUsefulData ? normalized : null;
     }
 
+    function normalizeIeeeActiveTabMetadata(raw) {
+        if (!raw || typeof raw !== 'object') {
+            return null;
+        }
+
+        const normalized = {
+            authors: normalizeAuthors(raw),
+            title: toStringValue(pickFirst(raw, ['title', 'formulaStrippedArticleTitle', 'displayDocTitle', 'articleTitle'])),
+            publicationTitle: toStringValue(pickFirst(raw, ['publicationTitle', 'displayPublicationTitle'])),
+            publicationDate: toStringValue(pickFirst(raw, ['publicationDate', 'displayPublicationDate', 'publicationYear'])),
+            volume: toStringValue(pickFirst(raw, ['volume'])),
+            issue: toStringValue(pickFirst(raw, ['issue'])),
+            startPage: toStringValue(pickFirst(raw, ['startPage', 'pageStart'])),
+            endPage: toStringValue(pickFirst(raw, ['endPage', 'pageEnd'])),
+            articleNumber: toStringValue(pickFirst(raw, ['articleNumber', 'arnumber'])),
+            contentType: toStringValue(pickFirst(raw, ['contentType', 'docType']))
+        };
+
+        const hasUsefulData =
+            normalized.title ||
+            normalized.publicationTitle ||
+            normalized.authors.length > 0 ||
+            normalized.articleNumber;
+
+        return hasUsefulData ? normalized : null;
+    }
+
     const api = {
         extractIeeeMetadataFromHtml,
         extractJsonObjectAfterAssignment,
+        normalizeIeeeActiveTabMetadata,
         normalizeIeeeRestMetadata
     };
 

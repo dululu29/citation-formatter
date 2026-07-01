@@ -248,7 +248,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         console.log("Sending fetchCitation to background for URL:", url);
-        const response = await chrome.runtime.sendMessage({ action: 'fetchCitation', url: url });
+        const response = await chrome.runtime.sendMessage({
+            action: 'fetchCitation',
+            tabId: tabs[0].id,
+            url: url
+        });
 
         if (chrome.runtime.lastError) {
             throw new Error(`Communication error: ${chrome.runtime.lastError.message || 'Unknown'}`);

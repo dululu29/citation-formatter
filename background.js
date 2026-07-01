@@ -1,5 +1,17 @@
 // --- Constants and Configuration ---
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
+const ieeeMetadataParserApi = (() => {
+    if (typeof module !== 'undefined' && module.exports) {
+        return require('./src/ieee/metadataParser');
+    }
+
+    const namespace = globalThis.CitationFormatterIeee || (globalThis.CitationFormatterIeee = {});
+    if (typeof importScripts === 'function' && !namespace.metadataParser) {
+        importScripts('src/ieee/metadataParser.js');
+    }
+
+    return namespace.metadataParser;
+})();
 const abbreviationResolverApi = (() => {
     if (typeof module !== 'undefined' && module.exports) {
         return require('./src/abbreviations/resolver');
@@ -20,6 +32,7 @@ const abbreviationResolverApi = (() => {
 
     return namespace.resolver;
 })();
+const { normalizeIeeeActiveTabMetadata } = ieeeMetadataParserApi;
 const { resolvePublicationAbbreviation } = abbreviationResolverApi;
 
 // --- Abbreviation Dictionaries ---
@@ -818,6 +831,79 @@ async function getIeeeCitation(url) {
     }
 }
 
+async function getIeeeMetadataFromActiveTab(tabId) {
+    try {
+        const injectionResults = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => {
+                const raw = window.xplGlobal?.document?.metadata;
+                if (!raw || typeof raw !== 'object') {
+                    return null;
+                }
+
+                const authorSource = raw.authors?.authors ?? raw.authors ?? raw.authorNames ?? [];
+
+                const serializeAuthor = (author) => {
+                    if (typeof author === 'string') {
+                        return author;
+                    }
+
+                    if (!author || typeof author !== 'object') {
+                        return null;
+                    }
+
+                    return {
+                        name:
+                            author.name ||
+                            author.preferredName ||
+                            author.fullName ||
+                            author.displayName ||
+                            author.authorName ||
+                            ''
+                    };
+                };
+
+                return {
+                    articleNumber: raw.articleNumber ?? raw.arnumber ?? '',
+                    authorNames: raw.authorNames ?? '',
+                    authors: Array.isArray(authorSource) ? authorSource.map(serializeAuthor).filter(Boolean) : authorSource,
+                    contentType: raw.contentType ?? raw.docType ?? '',
+                    displayDocTitle: raw.displayDocTitle ?? '',
+                    displayPublicationDate: raw.displayPublicationDate ?? '',
+                    displayPublicationTitle: raw.displayPublicationTitle ?? '',
+                    endPage: raw.endPage ?? raw.pageEnd ?? '',
+                    formulaStrippedArticleTitle: raw.formulaStrippedArticleTitle ?? '',
+                    issue: raw.issue ?? '',
+                    publicationDate: raw.publicationDate ?? raw.displayPublicationDate ?? raw.publicationYear ?? '',
+                    publicationTitle: raw.publicationTitle ?? raw.displayPublicationTitle ?? '',
+                    publicationYear: raw.publicationYear ?? '',
+                    startPage: raw.startPage ?? raw.pageStart ?? '',
+                    title: raw.title ?? raw.formulaStrippedArticleTitle ?? raw.displayDocTitle ?? '',
+                    volume: raw.volume ?? ''
+                };
+            }
+        });
+
+        const rawMetadata = injectionResults?.[0]?.result;
+        if (!rawMetadata) {
+            console.log("Background: Active-tab IEEE metadata unavailable; falling back to offscreen.");
+            return null;
+        }
+
+        const normalizedMetadata = normalizeIeeeActiveTabMetadata(rawMetadata);
+        if (!normalizedMetadata) {
+            console.log("Background: Active-tab IEEE metadata unavailable; falling back to offscreen.");
+            return null;
+        }
+
+        console.log("Background: Loaded IEEE metadata from active tab.");
+        return normalizedMetadata;
+    } catch (error) {
+        console.log("Background: Active-tab IEEE metadata unavailable; falling back to offscreen.");
+        return null;
+    }
+}
+
 async function formatIeeeCitation(metadata, settings, currentStyleKey) {
     const authorsList = metadata?.authors ?? [];
     const title = metadata?.title ?? 'N/A';
@@ -1169,8 +1255,15 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
                             results.push({ styleKey, citationText, suggestionError });
                         }
                     } else if (isIeee) {
-                        const ieeeResponse = await getIeeeCitation(url);
-                        fetchedMetadata = ieeeResponse.metadata;
+                        if (message.tabId) {
+                            fetchedMetadata = await getIeeeMetadataFromActiveTab(message.tabId);
+                        }
+
+                        if (!fetchedMetadata) {
+                            const ieeeResponse = await getIeeeCitation(url);
+                            fetchedMetadata = ieeeResponse.metadata;
+                        }
+
                         for (const styleKey of settings.citationStyles) {
                             const { citationText, suggestionError } = await formatIeeeCitation(fetchedMetadata, settings, styleKey);
                             results.push({ styleKey, citationText, suggestionError });
