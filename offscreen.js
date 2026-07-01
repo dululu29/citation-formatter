@@ -2,6 +2,16 @@
 
 console.log("Offscreen document loaded.");
 
+const ieeeMetadataParserApi = globalThis.CitationFormatterIeee?.metadataParser;
+if (!ieeeMetadataParserApi) {
+    throw new Error("IEEE metadata parser helper failed to load in offscreen document.");
+}
+
+const {
+    extractIeeeMetadataFromHtml,
+    normalizeIeeeRestMetadata
+} = ieeeMetadataParserApi;
+
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Offscreen document received message:", message);
@@ -48,12 +58,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
- * Fetches the IEEE page content and extracts the metadata JSON.
- * (Unchanged from previous version)
+ * Fetches the IEEE page content and extracts metadata from either the
+ * page assignment script or the IEEE REST document endpoint.
  * @param {string} url - The IEEE Xplore document URL.
  * @returns {Promise<object>} - The parsed metadata object.
  */
 async function fetchIeeeAndExtractMetadata(url) {
+    let htmlFailureMessage = 'HTML metadata not attempted.';
+    let restFailureMessage = 'REST fallback unavailable.';
     try {
         const response = await fetch(url, {
             method: 'GET',
@@ -67,31 +79,66 @@ async function fetchIeeeAndExtractMetadata(url) {
         const htmlContent = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlContent, 'text/html');
-        const scripts = doc.querySelectorAll('script');
-        let metadataJson = null;
-        const metadataRegex = /xplGlobal\.document\.metadata\s*=\s*({.*});/;
-        for (const script of scripts) {
-            if (script.textContent) {
-                const match = script.textContent.match(metadataRegex);
-                if (match && match[1]) {
-                    try {
-                        metadataJson = JSON.parse(match[1]);
-                        console.log("Offscreen: Found and parsed IEEE metadata JSON.");
-                        break;
-                    } catch (jsonError) { console.error("Offscreen: Failed to parse IEEE metadata JSON:", jsonError); }
-                }
+        const documentTitle = doc.querySelector('title')?.textContent.trim() || '';
+
+        try {
+            const metadataJson = extractIeeeMetadataFromHtml(htmlContent);
+            if (metadataJson) {
+                console.log("Offscreen: Found and parsed IEEE metadata from HTML assignment.");
+                return metadataJson;
             }
+
+            htmlFailureMessage = 'HTML metadata not found.';
+        } catch (htmlError) {
+            htmlFailureMessage = htmlError.message || 'HTML metadata parse failed.';
         }
-        if (!metadataJson) {
-             console.error("Offscreen: IEEE Metadata script tag or JSON object not found.");
-             // Add basic check for abstract/title as fallback indicator
-             const abstract = doc.querySelector('.abstract-text .u-mb-1')?.textContent.trim();
-             const title = doc.querySelector('title')?.textContent.trim();
-             console.log("Offscreen: IEEE Abstract:", abstract ? abstract.substring(0,100)+'...' : 'Not Found');
-             console.log("Offscreen: IEEE Title:", title || 'Not Found');
-             throw new Error("Could not find or parse metadata JSON in the IEEE page content.");
+
+        console.warn("Offscreen: IEEE HTML metadata extraction failed.", {
+            contentLength: htmlContent.length,
+            containsDocumentMetadata: htmlContent.includes('document.metadata'),
+            containsXplGlobal: htmlContent.includes('xplGlobal'),
+            responseUrl: response.url || url,
+            status: response.status,
+            title: documentTitle || 'Not Found'
+        });
+
+        const documentIdMatch = url.match(/\/document\/(\d+)/);
+        if (!documentIdMatch) {
+            restFailureMessage = 'REST fallback unavailable (no IEEE document ID in URL).';
+            throw new Error(`${htmlFailureMessage} ${restFailureMessage}`);
         }
-        return metadataJson;
+
+        const documentId = documentIdMatch[1];
+        const restUrl = `https://ieeexplore.ieee.org/rest/document/${documentId}`;
+
+        try {
+            const restResponse = await fetch(restUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*',
+                    'Referer': url,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!restResponse.ok) {
+                restFailureMessage = `REST fallback failed (${restResponse.status}): ${restResponse.statusText}`;
+                throw new Error(restFailureMessage);
+            }
+
+            const restJson = await restResponse.json();
+            const normalizedRestMetadata = normalizeIeeeRestMetadata(restJson);
+            if (!normalizedRestMetadata) {
+                restFailureMessage = 'REST fallback returned JSON but could not be normalized.';
+                throw new Error(restFailureMessage);
+            }
+
+            console.log("Offscreen: Loaded IEEE metadata from REST fallback.");
+            return normalizedRestMetadata;
+        } catch (restError) {
+            restFailureMessage = restError.message || 'REST fallback failed.';
+            throw new Error(`${htmlFailureMessage} REST fallback failed or was unavailable: ${restFailureMessage}`);
+        }
     } catch (error) {
         console.error("Offscreen: Error in fetchIeeeAndExtractMetadata:", error);
         throw error; // Re-throw
